@@ -1,38 +1,6 @@
 #pragma once
 
-struct control_block {
-  size_t shared_counter = 0;
-  size_t weak_counter = 0;
-
-  virtual void delete_object() = 0;
-  virtual ~control_block() = default;
-};
-
-template <typename T, typename Deleter>
-struct not_init_block : control_block {
-  T* ptr;
-  Deleter deleter;
-
-  not_init_block(T* p, Deleter d) : ptr(p), deleter(d) {}
-
-  void delete_object() override {
-    deleter(ptr);
-  }
-};
-
-template <typename T>
-struct init_block : control_block{
-  typename std::aligned_storage<sizeof(T), alignof(T)> data;
-
-  template <typename ...Args>
-  explicit init_block(Args&& ...args) {
-    new (&data) T(std::forward<Args>(args)...);
-  }
-
-  void delete_object() override {
-    reinterpret_cast<T*>(&data)->~T();
-  }
-};
+#include <control_block.h>
 
 template <typename T>
 struct weak_ptr;
@@ -42,7 +10,7 @@ struct shared_ptr {
   // constructors
   constexpr shared_ptr() noexcept : control(nullptr), ptr(nullptr) {}
 
-  constexpr explicit shared_ptr(std::nullptr_t) noexcept : control(nullptr), ptr(nullptr) {}
+  constexpr explicit shared_ptr(std::nullptr_t) noexcept : shared_ptr() {}
 
   template <class Y>
   explicit shared_ptr(Y* p) {
@@ -54,7 +22,7 @@ struct shared_ptr {
 
   template <class Y, class Deleter>
   shared_ptr(Y* p, Deleter d) {
-    control = new not_init_block<T, Deleter>(static_cast<T*>(p), d);
+    control = new not_init_block<Y, Deleter>(static_cast<Y*>(p), d);
     increase_control();
 
     ptr = static_cast<T*>(p);
@@ -99,6 +67,7 @@ struct shared_ptr {
     increase_control();
   }
 
+  // destructor
   ~shared_ptr() {
     if (control == nullptr) {
       return;
@@ -112,6 +81,7 @@ struct shared_ptr {
       }
     }
   }
+
   // operator=
   shared_ptr& operator=(const shared_ptr& r) noexcept {
     if (*this == r) {
@@ -119,6 +89,7 @@ struct shared_ptr {
     }
 
     shared_ptr<T>().swap(*this);
+
     control = r.control;
     increase_control();
     ptr = r.ptr;
@@ -183,7 +154,7 @@ struct shared_ptr {
     return ptr[idx];
   }
 
-  size_t use_count() const noexcept {
+  long use_count() const noexcept {
     return control == nullptr ? 0 : control->shared_counter;
   }
 
@@ -277,6 +248,7 @@ struct weak_ptr {
     weak_ptr<T>().swap(r);
   }
 
+  // destructor
   ~weak_ptr()  {
     if (control == nullptr) {
       return;
@@ -299,15 +271,18 @@ struct weak_ptr {
     weak_ptr<T>(r).swap(*this);
     return *this;
   }
+
   template<class Y>
   weak_ptr& operator=(const shared_ptr<Y>& r) noexcept {
     weak_ptr<T>(r).swap(*this);
     return *this;
   }
+
   weak_ptr& operator=(weak_ptr&& r) noexcept {
     weak_ptr<T>(std::move(r)).swap(*this);
     return *this;
   }
+
   template<class Y>
   weak_ptr& operator=(weak_ptr<Y>&& r) noexcept {
     weak_ptr<T>(std::move(r)).swap(*this);
@@ -329,7 +304,7 @@ struct weak_ptr {
   }
 
   // observers
-  size_t use_count() const noexcept {
+  long use_count() const noexcept {
     return control == nullptr ? 0 : control->shared_counter;
   }
 
@@ -348,12 +323,12 @@ struct weak_ptr {
     }
   }
 
-  control_block* control;
-  T* ptr;
-
   template <typename Y>
   friend class weak_ptr;
 
   template <typename Y>
   friend class shared_ptr;
+
+  control_block* control;
+  T* ptr;
 };
