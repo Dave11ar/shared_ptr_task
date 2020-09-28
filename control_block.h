@@ -9,14 +9,13 @@ struct control_block {
 };
 
 template <typename T, typename Deleter>
-struct not_init_block : control_block {
+struct not_init_block : control_block, Deleter {
   T* ptr;
-  Deleter deleter;
 
-  not_init_block(T* p, Deleter d) : ptr(p), deleter(d) {}
+  not_init_block(T* p, Deleter d) : ptr(p), Deleter(std::move(d)) {}
 
   void delete_object() override {
-    deleter(ptr);
+    static_cast<Deleter&>(*this)(ptr);
   }
 };
 
