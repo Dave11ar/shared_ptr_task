@@ -19,9 +19,9 @@ struct shared_ptr {
   shared_ptr(Y* p, Deleter d) {
     try {
       control = new not_init_block<Y, Deleter>(p, d);
-    } catch (std::exception &ba) {
+    } catch (...) {
       d(p);
-      throw ba;
+      throw;
     }
     ptr = p;
 
