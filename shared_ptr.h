@@ -16,12 +16,19 @@ struct shared_ptr {
   explicit shared_ptr(Y* p) : shared_ptr(p, std::default_delete<Y>()){}
 
   template <class Y, class Deleter>
-  shared_ptr(Y* p, Deleter d) : control(new not_init_block<Y, Deleter>(p, d)), ptr(p) {
+  shared_ptr(Y* p, Deleter d) {
+    try {
+      control = new not_init_block<Y, Deleter>(p, d);
+    } catch (std::bad_alloc &ba) {
+      d(p);
+    }
+    ptr = p;
+
     increase_control();
   }
 
   template <class Deleter>
-  shared_ptr(std::nullptr_t p, Deleter d) : control(nullptr), ptr(p) {}
+  shared_ptr(std::nullptr_t p, Deleter d) : shared_ptr() {}
 
   template <class Y>
   shared_ptr(const shared_ptr<Y>& r, T* p) noexcept : control(r.control), ptr(p) {
@@ -149,10 +156,8 @@ struct shared_ptr {
 
   template <typename Y>
   friend class weak_ptr;
-
   template <typename Y>
   friend class shared_ptr;
-
 
   control_block* control;
   T* ptr;
@@ -176,22 +181,22 @@ bool operator!=(const shared_ptr<T>& lhs, const shared_ptr<U>& rhs) noexcept {
 
 template <class T>
 bool operator==(const shared_ptr<T>& lhs, std::nullptr_t) noexcept {
-  return !lhs;
+  return lhs.get() == nullptr;
 }
 
 template <class T>
 bool operator==(std::nullptr_t, const shared_ptr<T>& rhs) noexcept {
-  return !rhs;
+  return rhs.get() == nullptr;
 }
 
 template <class T>
 bool operator!=(const shared_ptr<T>& lhs, std::nullptr_t) noexcept {
-  return static_cast<bool>(lhs);
+  return !(lhs == nullptr);
 }
 
 template< class T >
 bool operator!=(std::nullptr_t, const shared_ptr<T>& rhs ) noexcept {
-  return static_cast<bool>(rhs);
+  return !(rhs == nullptr);
 }
 
 
